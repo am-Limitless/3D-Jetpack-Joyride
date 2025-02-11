@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
 public class JetpackController : MonoBehaviour
@@ -23,12 +24,14 @@ public class JetpackController : MonoBehaviour
 
     [Header("Audio Effects")]
     [SerializeField] private AudioClip rocketTakeOff;
-    [SerializeField] private AudioClip hitSound;
 
     [Header("References")]
     [SerializeField] private GameObject jetpack;             // Assign Jetpack GameObject in Inspector
     [SerializeField] private Rigidbody jetpackRb;
     [SerializeField] private Rigidbody[] ragdollRigidbodies; // Assign all Ragdoll Rigidbodies in Inspector
+
+    [Header("Game Over Event")]
+    public UnityEvent onPlayerHit;
 
     // ===================== Components =====================
     private CharacterController characterController;
@@ -179,8 +182,15 @@ public class JetpackController : MonoBehaviour
     {
         if (other.CompareTag("Obstacle"))
         {
-            Debug.Log("Player hit an obstacle! Removing jetpack and triggering ragdoll.");
-            audioSource.PlayOneShot(hitSound);
+            rightGas.Stop();
+            leftGas.Stop();
+
+            // Trigger the game over event
+            if (onPlayerHit != null)
+            {
+                onPlayerHit.Invoke();
+            }
+
             RemoveJetpack();
             ActivateRagdoll();
         }
@@ -194,7 +204,6 @@ public class JetpackController : MonoBehaviour
             jetpackRb.isKinematic = false;
             jetpackRb.useGravity = true;
             jetpackRb.constraints = RigidbodyConstraints.None;
-
 
             // Apply random force to make it spin and fly away
             Vector3 explosionForce = new Vector3(Random.Range(-5f, 5f), 10f, Random.Range(-5f, 5f));
