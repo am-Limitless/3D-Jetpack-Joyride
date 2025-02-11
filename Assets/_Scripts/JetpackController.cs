@@ -11,7 +11,7 @@ public class JetpackController : MonoBehaviour
     [SerializeField] private float layerWeightSpeed = 5f;
 
     [Header("Side Movement")]
-    [SerializeField] private float laneWidth = 3f;           // Distance between lanes
+    //[SerializeField] private float laneWidth = 3f;           // Distance between lanes
     [SerializeField] private float sideMoveSpeed = 200f;     // Side movement speed
     [SerializeField] private float maxHorizontalLimit = 23f; // Horizontal movement limit
 
