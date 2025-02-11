@@ -12,7 +12,7 @@ public class JetpackController : MonoBehaviour
 
     [Header("Side Movement")]
     //[SerializeField] private float laneWidth = 3f;           // Distance between lanes
-    [SerializeField] private float sideMoveSpeed = 200f;     // Side movement speed
+    [SerializeField] private float sideMoveSpeed = 100f;     // Side movement speed
     [SerializeField] private float maxHorizontalLimit = 23f; // Horizontal movement limit
 
     [Header("Visual Effects")]
@@ -23,6 +23,12 @@ public class JetpackController : MonoBehaviour
 
     [Header("Audio Effects")]
     [SerializeField] private AudioClip rocketTakeOff;
+    [SerializeField] private AudioClip hitSound;
+
+    [Header("References")]
+    [SerializeField] private GameObject jetpack;             // Assign Jetpack GameObject in Inspector
+    [SerializeField] private Rigidbody jetpackRb;
+    [SerializeField] private Rigidbody[] ragdollRigidbodies; // Assign all Ragdoll Rigidbodies in Inspector
 
     // ===================== Components =====================
     private CharacterController characterController;
@@ -51,6 +57,8 @@ public class JetpackController : MonoBehaviour
         targetX = transform.position.x; // Initialize target position
         playerInput = GetComponent<PlayerInput>();
         audioSource = GetComponent<AudioSource>();
+
+        DisableRagdoll();
     }
 
     private void Update()
@@ -167,4 +175,50 @@ public class JetpackController : MonoBehaviour
         animator.SetLayerWeight(flyingLayerIndex, newWeight);
     }
 
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Obstacle"))
+        {
+            Debug.Log("Player hit an obstacle! Removing jetpack and triggering ragdoll.");
+            audioSource.PlayOneShot(hitSound);
+            RemoveJetpack();
+            ActivateRagdoll();
+        }
+    }
+
+    private void RemoveJetpack()
+    {
+        if (jetpack != null)
+        {
+            jetpack.transform.parent = null;
+            jetpackRb.isKinematic = false;
+            jetpackRb.useGravity = true;
+            jetpackRb.constraints = RigidbodyConstraints.None;
+
+
+            // Apply random force to make it spin and fly away
+            Vector3 explosionForce = new Vector3(Random.Range(-5f, 5f), 10f, Random.Range(-5f, 5f));
+            jetpackRb.AddForce(explosionForce, ForceMode.Impulse);
+            jetpackRb.AddTorque(Random.insideUnitSphere * 10f, ForceMode.Impulse);
+        }
+    }
+
+    private void ActivateRagdoll()
+    {
+        characterController.enabled = false; // Disable Character Controller
+        animator.enabled = false; // Disable Animator to enable physics movement
+
+        foreach (Rigidbody rb in ragdollRigidbodies)
+        {
+            rb.isKinematic = false; // Enable physics on all ragdoll parts
+        }
+    }
+
+    private void DisableRagdoll()
+    {
+        foreach (Rigidbody rb in ragdollRigidbodies)
+        {
+            rb.isKinematic = true; // Disable physics at the start
+        }
+    }
 }
