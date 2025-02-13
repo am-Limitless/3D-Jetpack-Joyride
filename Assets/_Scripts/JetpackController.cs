@@ -1,9 +1,11 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
 public class JetpackController : MonoBehaviour
 {
+    #region Variables
     [Header("Movement Parameters")]
     [SerializeField] private float playerSpeed = 5f;         // Movement speed forward
     [SerializeField] private float upLift = 30f;             // Jetpack lift force
@@ -12,7 +14,6 @@ public class JetpackController : MonoBehaviour
     [SerializeField] private float layerWeightSpeed = 5f;
 
     [Header("Side Movement")]
-    //[SerializeField] private float laneWidth = 3f;           // Distance between lanes
     [SerializeField] private float sideMoveSpeed = 100f;     // Side movement speed
     [SerializeField] private float maxHorizontalLimit = 23f; // Horizontal movement limit
 
@@ -26,9 +27,12 @@ public class JetpackController : MonoBehaviour
     [SerializeField] private AudioClip rocketTakeOff;
 
     [Header("References")]
-    [SerializeField] private GameObject jetpack;             // Assign Jetpack GameObject in Inspector
+    [SerializeField] private GameObject jetpack;
     [SerializeField] private Rigidbody jetpackRb;
-    [SerializeField] private Rigidbody[] ragdollRigidbodies; // Assign all Ragdoll Rigidbodies in Inspector
+    [SerializeField] private Rigidbody[] ragdollRigidbodies;
+
+    [Header("UI References")]
+    [SerializeField] private TMP_Text distanceText;
 
     [Header("Game Over Event")]
     public UnityEvent onPlayerHit;
@@ -41,58 +45,87 @@ public class JetpackController : MonoBehaviour
 
     // ===================== Player State =====================
     private bool isFlying = false;
-    private bool wasFlying = false;                           // Track previous flying state
+    private bool wasFlying = false;
 
     // ===================== Movement Variables =====================
-    private Vector3 moveDirection;                            // Stores movement direction
-    private float verticalVelocity = 0f;                      // Stores vertical movement speed
-    private float targetX = 0f;                               // Target position for smooth movement
+    private Vector3 moveDirection;
+    private float verticalVelocity = 0f;
+    private float targetX = 0f;
+    private float distanceTraveled = 0f;
 
     // ===================== Input Handling =====================
     private Vector2 moveInput;
     private int flyingLayerIndex;
+    #endregion
 
+    #region Initialization
     private void Awake()
     {
         characterController = GetComponent<CharacterController>();
         animator = GetComponent<Animator>();
         flyingLayerIndex = animator.GetLayerIndex("Flying");
-        targetX = transform.position.x; // Initialize target position
+        targetX = transform.position.x;
         playerInput = GetComponent<PlayerInput>();
         audioSource = GetComponent<AudioSource>();
 
         DisableRagdoll();
     }
+    #endregion
 
+    #region Update Methods
     private void Update()
     {
-        // Move forward
+        float deltaTime = Time.deltaTime;
         moveDirection = transform.forward * playerSpeed;
 
-        // Check if player is on the ground
         bool isGrounded = characterController.isGrounded;
 
-        HandleJoystickInput(); // Get movement input
-        Flying(isGrounded); // Apply flying or falling logic.
-        GasParticleEffect(); // Manage gas particle effects.
+        HandleJoystickInput();
+        HandleFlying(isGrounded);
+        HandleGasParticleEffects();
 
-        // Move the player smoothly towards the target X position
         float newX = Mathf.Lerp(transform.position.x, targetX, sideMoveSpeed * Time.deltaTime);
-        moveDirection.x = newX - transform.position.x; // Apply lateral movement
-
-        // Apply vertical velocity to movement
+        moveDirection.x = newX - transform.position.x;
         moveDirection.y = verticalVelocity;
 
-        // Move the character
         characterController.Move(moveDirection * Time.deltaTime);
-
-        // Update animator layer weight only when grounded state changes
         UpdateAnimatorLayerWeight(isGrounded);
+
+        // **Track Distance Traveled**
+        distanceTraveled += playerSpeed * deltaTime;
+
+        if (characterController.isGrounded || isFlying)
+        {
+            FindFirstObjectByType<GameOverManager>().SaveLastPosition(transform.position, gameObject);
+        }
+
+        distanceText.text = $"Distance: {GetDistanceInKilometers():F2} KM";
+    }
+    #endregion
+
+    #region Distance Calculation
+    public float GetDistanceInKilometers()
+    {
+        return distanceTraveled / 1000f; // Convert meters to kilometers
     }
 
+    // Setter to restore distance when respawning
+    public void SetDistanceTraveled(float savedDistance)
+    {
+        distanceTraveled = savedDistance;
+    }
+
+    public void AssignDistanceText(TMP_Text newDistanceText)
+    {
+        distanceText = newDistanceText;
+    }
+
+    #endregion
+
+    #region Input Handling
     public void OnMove(InputValue value)
     {
-        moveInput = value.Get<Vector2>(); // Read joystick input
+        moveInput = value.Get<Vector2>();
     }
 
     private void HandleJoystickInput()
@@ -100,8 +133,9 @@ public class JetpackController : MonoBehaviour
         float deltaX = moveInput.x * sideMoveSpeed * Time.deltaTime; // Scale joystick movement
         targetX = Mathf.Clamp(targetX + deltaX, -maxHorizontalLimit, maxHorizontalLimit);
     }
+    #endregion
 
-    // UI Button methods
+    #region Flying Mechanics
     public void StartFlying()
     {
         isFlying = true;
@@ -112,7 +146,7 @@ public class JetpackController : MonoBehaviour
         isFlying = false;
     }
 
-    private void Flying(bool isGrounded)
+    private void HandleFlying(bool isGrounded)
     {
         if (isFlying)
         {
@@ -145,8 +179,10 @@ public class JetpackController : MonoBehaviour
             }
         }
     }
+    #endregion
 
-    private void GasParticleEffect()
+    #region Visual Effects
+    private void HandleGasParticleEffects()
     {
         if (isFlying && !wasFlying)
         {
@@ -165,19 +201,19 @@ public class JetpackController : MonoBehaviour
 
         wasFlying = isFlying; // Update state
     }
+    #endregion
 
+    #region Animation
     private void UpdateAnimatorLayerWeight(bool isGrounded)
     {
-        // Get current layer weight
         float currentWeight = animator.GetLayerWeight(flyingLayerIndex);
-
-        // Only change weight if the player is flying or has landed
         float targetWeight = isGrounded ? 0f : 1f;
         float newWeight = Mathf.Lerp(currentWeight, targetWeight, layerWeightSpeed * Time.deltaTime);
-
         animator.SetLayerWeight(flyingLayerIndex, newWeight);
     }
+    #endregion
 
+    #region Collision Handling
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Obstacle"))
@@ -195,7 +231,9 @@ public class JetpackController : MonoBehaviour
             ActivateRagdoll();
         }
     }
+    #endregion
 
+    #region Jetpack Handling
     private void RemoveJetpack()
     {
         if (jetpack != null)
@@ -211,15 +249,17 @@ public class JetpackController : MonoBehaviour
             jetpackRb.AddTorque(Random.insideUnitSphere * 10f, ForceMode.Impulse);
         }
     }
+    #endregion
 
+    #region Ragdoll Handling
     private void ActivateRagdoll()
     {
-        characterController.enabled = false; // Disable Character Controller
-        animator.enabled = false; // Disable Animator to enable physics movement
+        characterController.enabled = false;
+        animator.enabled = false;
 
         foreach (Rigidbody rb in ragdollRigidbodies)
         {
-            rb.isKinematic = false; // Enable physics on all ragdoll parts
+            rb.isKinematic = false;
         }
     }
 
@@ -227,7 +267,19 @@ public class JetpackController : MonoBehaviour
     {
         foreach (Rigidbody rb in ragdollRigidbodies)
         {
-            rb.isKinematic = true; // Disable physics at the start
+            rb.isKinematic = true;
         }
     }
+    #endregion
+
+    #region Reset Player
+    public void ResetPlayer()
+    {
+        characterController.enabled = true; // Enable movement
+        animator.enabled = true; // Re-enable animations
+        DisableRagdoll(); // Reset physics
+        verticalVelocity = 0f; // Reset fall speed
+        isFlying = false; // Ensure player starts in a normal state
+    }
+    #endregion
 }
